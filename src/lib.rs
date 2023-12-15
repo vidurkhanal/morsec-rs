@@ -242,3 +242,41 @@ pub fn take_or<T>(p: impl Parser<T> + 'static, q: impl Parser<T> + 'static) -> i
         q: Box::new(q),
     }
 }
+
+pub fn optional<T>(p: impl Parser<T> + 'static) -> impl Parser<Option<T>> {
+    struct OptionalParser<T> {
+        p: Box<dyn Parser<T>>,
+    }
+    impl<T> Parser<Option<T>> for OptionalParser<T> {
+        fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, Option<T>), MorsecError> {
+            match self.p.parse(input.clone()) {
+                Ok((rest, x)) => Ok((rest, Some(x))),
+                Err(_) => Ok((input, None)),
+            }
+        }
+    }
+    OptionalParser { p: Box::new(p) }
+}
+
+pub fn many<T>(p: impl Parser<T> + 'static) -> impl Parser<Vec<T>> {
+    struct ManyParser<T> {
+        p: Box<dyn Parser<T>>,
+    }
+    impl<T> Parser<Vec<T>> for ManyParser<T> {
+        fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, Vec<T>), MorsecError> {
+            let mut rest = input;
+            let mut result = Vec::new();
+            loop {
+                match self.p.parse(rest.clone()) {
+                    Ok((new_rest, x)) => {
+                        rest = new_rest;
+                        result.push(x);
+                    }
+                    Err(_) => break,
+                }
+            }
+            Ok((rest, result))
+        }
+    }
+    ManyParser { p: Box::new(p) }
+}
