@@ -64,3 +64,27 @@ pub fn prefix(p: String) -> impl Parser<String> {
 
     Wrapper { prefix: p }
 }
+
+pub fn map<T, U, F>(p: impl Parser<T> + 'static, f: F) -> impl Parser<U>
+where
+    F: Fn(T) -> U + 'static,
+{
+    struct Wrapper<T, F> {
+        p: Box<dyn Parser<T>>,
+        f: Box<F>,
+    }
+
+    impl<T, U, F> Parser<U> for Wrapper<T, F>
+    where
+        F: Fn(T) -> U + 'static,
+    {
+        fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, U), MorsecError> {
+            let (new_input, t) = self.p.parse(input)?;
+            Ok((new_input, (self.f)(t)))
+        }
+    }
+    Wrapper {
+        p: Box::new(p),
+        f: Box::new(f),
+    }
+}
