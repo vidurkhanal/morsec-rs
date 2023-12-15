@@ -79,12 +79,71 @@ where
         F: Fn(T) -> U + 'static,
     {
         fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, U), MorsecError> {
-            let (new_input, t) = self.p.parse(input)?;
-            Ok((new_input, (self.f)(t)))
+            match self.p.parse(input) {
+                Ok((p, t)) => Ok((p, (self.f)(t))),
+                Err(e) => Err(e),
+            }
         }
     }
     Wrapper {
         p: Box::new(p),
         f: Box::new(f),
     }
+}
+
+pub fn bind<T, U, F>(p: impl Parser<T> + 'static, f: F) -> impl Parser<U>
+where
+    F: Fn(T) -> Box<dyn Parser<U>>,
+{
+    struct Wrapper<T, F> {
+        p: Box<dyn Parser<T>>,
+        f: Box<F>,
+    }
+
+    impl<T, U, F> Parser<U> for Wrapper<T, F>
+    where
+        F: Fn(T) -> Box<dyn Parser<U>>,
+    {
+        fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, U), MorsecError> {
+            match self.p.parse(input) {
+                Ok((p, t)) => (self.f)(t).parse(p),
+                Err(e) => Err(e),
+            }
+        }
+    }
+    Wrapper {
+        p: Box::new(p),
+        f: Box::new(f),
+    }
+}
+
+pub fn while_parse<F>(predicate: F) -> impl Parser<String>
+where
+    F: Fn(char) -> bool,
+{
+    struct Wrapper<F> {
+        predicate: F,
+    }
+
+    impl<F> Parser<String> for Wrapper<F>
+    where
+        F: Fn(char) -> bool,
+    {
+        fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, String), MorsecError> {
+            let mut i = 0;
+            for c in input.text.chars() {
+                if !(self.predicate)(c) {
+                    break;
+                }
+                i += 1;
+            }
+            let new_input = MorsecStr {
+                text: input.text[i..].to_string(),
+                position: input.position + i,
+            };
+            Ok((new_input, input.text[0..i].to_string()))
+        }
+    }
+
+    Wrapper { predicate }
 }
