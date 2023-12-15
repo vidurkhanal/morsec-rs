@@ -21,25 +21,25 @@ pub trait Parser<T> {
 }
 
 pub fn wrap<T: Clone>(x: T) -> impl Parser<T> {
-    struct Wrapper<T> {
+    struct WrapParser<T> {
         x: T,
     }
 
-    impl<T: Clone> Parser<T> for Wrapper<T> {
+    impl<T: Clone> Parser<T> for WrapParser<T> {
         fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, T), MorsecError> {
             Ok((input, self.x.clone()))
         }
     }
 
-    Wrapper { x }
+    WrapParser { x }
 }
 
 pub fn prefix(p: String) -> impl Parser<String> {
-    struct Wrapper {
+    struct PrefixParser {
         prefix: String,
     }
 
-    impl Parser<String> for Wrapper {
+    impl Parser<String> for PrefixParser {
         fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, String), MorsecError> {
             let prefix_len = self.prefix.len();
             let prefix_slice = &input.text[0..prefix_len];
@@ -62,19 +62,19 @@ pub fn prefix(p: String) -> impl Parser<String> {
         }
     }
 
-    Wrapper { prefix: p }
+    PrefixParser { prefix: p }
 }
 
 pub fn map<T, U, F>(p: impl Parser<T> + 'static, f: F) -> impl Parser<U>
 where
     F: Fn(T) -> U + 'static,
 {
-    struct Wrapper<T, F> {
+    struct MapParser<T, F> {
         p: Box<dyn Parser<T>>,
         f: Box<F>,
     }
 
-    impl<T, U, F> Parser<U> for Wrapper<T, F>
+    impl<T, U, F> Parser<U> for MapParser<T, F>
     where
         F: Fn(T) -> U + 'static,
     {
@@ -85,7 +85,7 @@ where
             }
         }
     }
-    Wrapper {
+    MapParser {
         p: Box::new(p),
         f: Box::new(f),
     }
@@ -95,12 +95,12 @@ pub fn bind<T, U, F>(p: impl Parser<T> + 'static, f: F) -> impl Parser<U>
 where
     F: Fn(T) -> Box<dyn Parser<U>>,
 {
-    struct Wrapper<T, F> {
+    struct BindParser<T, F> {
         p: Box<dyn Parser<T>>,
         f: Box<F>,
     }
 
-    impl<T, U, F> Parser<U> for Wrapper<T, F>
+    impl<T, U, F> Parser<U> for BindParser<T, F>
     where
         F: Fn(T) -> Box<dyn Parser<U>>,
     {
@@ -111,7 +111,7 @@ where
             }
         }
     }
-    Wrapper {
+    BindParser {
         p: Box::new(p),
         f: Box::new(f),
     }
