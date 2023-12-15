@@ -121,11 +121,11 @@ pub fn while_parse<F>(predicate: F) -> impl Parser<String>
 where
     F: Fn(char) -> bool,
 {
-    struct Wrapper<F> {
+    struct WhileParser<F> {
         predicate: F,
     }
 
-    impl<F> Parser<String> for Wrapper<F>
+    impl<F> Parser<String> for WhileParser<F>
     where
         F: Fn(char) -> bool,
     {
@@ -145,5 +145,100 @@ where
         }
     }
 
-    Wrapper { predicate }
+    WhileParser { predicate }
+}
+
+pub fn take_left<T, U>(p: impl Parser<T> + 'static, q: impl Parser<U> + 'static) -> impl Parser<T> {
+    struct TakeLeftParser<T, U> {
+        p: Box<dyn Parser<T>>,
+        q: Box<dyn Parser<U>>,
+    }
+    impl<T, U> Parser<T> for TakeLeftParser<T, U> {
+        fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, T), MorsecError> {
+            match self.p.parse(input) {
+                Ok((input1, x)) => match self.q.parse(input1) {
+                    Ok((input2, _)) => Ok((input2, x)),
+                    Err(e) => Err(e),
+                },
+                Err(e) => Err(e),
+            }
+        }
+    }
+    TakeLeftParser {
+        p: Box::new(p),
+        q: Box::new(q),
+    }
+}
+
+pub fn take_right<T, U>(
+    p: impl Parser<T> + 'static,
+    q: impl Parser<U> + 'static,
+) -> impl Parser<U> {
+    struct TakeRightParser<T, U> {
+        p: Box<dyn Parser<T>>,
+        q: Box<dyn Parser<U>>,
+    }
+
+    impl<T, U> Parser<U> for TakeRightParser<T, U> {
+        fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, U), MorsecError> {
+            match self.p.parse(input) {
+                Ok((input1, _)) => self.q.parse(input1),
+                Err(e) => Err(e),
+            }
+        }
+    }
+    TakeRightParser {
+        p: Box::new(p),
+        q: Box::new(q),
+    }
+}
+
+pub fn take_both<T, U>(
+    p: impl Parser<T> + 'static,
+    q: impl Parser<U> + 'static,
+) -> impl Parser<(T, U)> {
+    struct TakeBothParser<T, U> {
+        p: Box<dyn Parser<T>>,
+        q: Box<dyn Parser<U>>,
+    }
+    impl<T, U> Parser<(T, U)> for TakeBothParser<T, U> {
+        fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, (T, U)), MorsecError> {
+            match self.p.parse(input) {
+                Ok((input1, x)) => match self.q.parse(input1) {
+                    Ok((input2, y)) => Ok((input2, (x, y))),
+                    Err(e) => Err(e),
+                },
+                Err(e) => Err(e),
+            }
+        }
+    }
+    TakeBothParser {
+        p: Box::new(p),
+        q: Box::new(q),
+    }
+}
+
+pub fn take_or<T>(p: impl Parser<T> + 'static, q: impl Parser<T> + 'static) -> impl Parser<T> {
+    struct TakeOrParser<T> {
+        p: Box<dyn Parser<T>>,
+        q: Box<dyn Parser<T>>,
+    }
+    impl<T> Parser<T> for TakeOrParser<T> {
+        fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, T), MorsecError> {
+            match self.p.parse(input.clone()) {
+                Ok((rest, x)) => Ok((rest, x)),
+                Err(e1) => match self.q.parse(input.clone()) {
+                    Ok((rest, x)) => Ok((rest, x)),
+                    Err(e2) => Err(MorsecError {
+                        message: format!("{} or {}", e1.message, e2.message),
+                        position: input.position,
+                    }),
+                },
+            }
+        }
+    }
+    TakeOrParser {
+        p: Box::new(p),
+        q: Box::new(q),
+    }
 }
