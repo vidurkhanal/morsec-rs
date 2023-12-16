@@ -41,10 +41,17 @@ pub fn prefix(p: String) -> impl Parser<String> {
 
     impl Parser<String> for PrefixParser {
         fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, String), MorsecError> {
+            if input.text.is_empty() {
+                return Err(MorsecError {
+                    message: "Empty input".to_string(),
+                    position: input.position,
+                });
+            }
             let prefix_len = self.prefix.len();
+            // dbg!(&input.text);
             let prefix_slice = &input.text[0..prefix_len];
             if prefix_slice == self.prefix {
-                let new_pos = input.text.len() - prefix_len;
+                let new_pos = input.position + prefix_len;
                 let new_input = MorsecStr {
                     text: input.text[prefix_len..].to_string(),
                     position: new_pos,
@@ -117,6 +124,37 @@ where
     }
 }
 
+// pub fn while_parse<F>(predicate: F) -> impl Parser<String>
+// where
+//     F: Fn(char) -> bool,
+// {
+//     struct WhileParser<F> {
+//         predicate: F,
+//     }
+//
+//     impl<F> Parser<String> for WhileParser<F>
+//     where
+//         F: Fn(char) -> bool,
+//     {
+//         fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, String), MorsecError> {
+//             let mut i = 0;
+//             for c in input.text.chars() {
+//                 if !(self.predicate)(c) {
+//                     break;
+//                 }
+//                 i += 1;
+//             }
+//             let new_input = MorsecStr {
+//                 text: input.text[i + 1..].to_string(),
+//                 position: input.position + i + 1,
+//             };
+//             Ok((new_input, input.text[0..i + 1].to_string()))
+//         }
+//     }
+//
+//     WhileParser { predicate }
+// }
+
 pub fn while_parse<F>(predicate: F) -> impl Parser<String>
 where
     F: Fn(char) -> bool,
@@ -130,18 +168,21 @@ where
         F: Fn(char) -> bool,
     {
         fn parse(&self, input: MorsecStr) -> Result<(MorsecStr, String), MorsecError> {
-            let mut i = 0;
-            for c in input.text.chars() {
-                if !(self.predicate)(c) {
+            let mut result = String::new();
+
+            for ch in input.text.chars() {
+                if (self.predicate)(ch) {
+                    result.push(ch);
+                } else {
                     break;
                 }
-                i += 1;
             }
-            let new_input = MorsecStr {
-                text: input.text[i..].to_string(),
-                position: input.position + i,
+
+            let rest = MorsecStr {
+                text: input.text[result.len()..].into(),
+                position: result.len(),
             };
-            Ok((new_input, input.text[0..i].to_string()))
+            Ok((rest, result))
         }
     }
 
